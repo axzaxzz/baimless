@@ -38,6 +38,8 @@ Theme.Colors = {
     Text = Color3.fromRGB(234, 234, 234),
     TextDim = Color3.fromRGB(150, 150, 150),
     Border = Color3.fromRGB(40, 40, 50),
+    ButtonDark = Color3.fromRGB(45, 45, 55),
+    ButtonDarkHover = Color3.fromRGB(55, 55, 65),
     Success = Color3.fromRGB(100, 255, 100),
     Error = Color3.fromRGB(255, 100, 100)
 }
@@ -88,6 +90,32 @@ function Animations:Shake(object, intensity, duration)
         object.Position = originalPos + UDim2.new(0, math.random(-intensity, intensity), 0, 0)
     end
     object.Position = originalPos
+end
+
+function Animations:FadeOutGui(guiObject, duration)
+    duration = duration or 0.3
+    local objects = {}
+    
+    local function collectObjects(parent)
+        for _, child in ipairs(parent:GetChildren()) do
+            if child:IsA("GuiObject") then
+                table.insert(objects, child)
+                collectObjects(child)
+            end
+        end
+    end
+    
+    collectObjects(guiObject)
+    
+    for _, obj in ipairs(objects) do
+        if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+            self:Tween(obj, {TextTransparency = 1, BackgroundTransparency = 1}, duration)
+        elseif obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
+            self:Tween(obj, {ImageTransparency = 1, BackgroundTransparency = 1}, duration)
+        elseif obj:IsA("Frame") then
+            self:Tween(obj, {BackgroundTransparency = 1}, duration)
+        end
+    end
 end
 
 -- Component Utilities
@@ -231,11 +259,11 @@ function Baimless:ShowLogin(callback)
         Animations:Tween(checkbox, {BackgroundColor3 = rememberState and Theme.Colors.Accent or Theme.Colors.Background}, 0.15)
     end)
     
-    -- Submit button
+    -- Submit button (dark gray like the reference image)
     local submitBtn = Components:Create("TextButton", {
         Size = UDim2.new(1, 0, 0, 40),
         Position = UDim2.new(0, 0, 1, -40),
-        BackgroundColor3 = Theme.Colors.Accent,
+        BackgroundColor3 = Theme.Colors.ButtonDark,
         BorderSizePixel = 0,
         Text = "Submit",
         TextColor3 = Color3.new(1, 1, 1),
@@ -247,11 +275,11 @@ function Baimless:ShowLogin(callback)
     
     -- Button hover effect
     submitBtn.MouseEnter:Connect(function()
-        Animations:Tween(submitBtn, {BackgroundColor3 = Theme.Colors.AccentSoft}, 0.15)
+        Animations:Tween(submitBtn, {BackgroundColor3 = Theme.Colors.ButtonDarkHover}, 0.15)
     end)
     
     submitBtn.MouseLeave:Connect(function()
-        Animations:Tween(submitBtn, {BackgroundColor3 = Theme.Colors.Accent}, 0.15)
+        Animations:Tween(submitBtn, {BackgroundColor3 = Theme.Colors.ButtonDark}, 0.15)
     end)
     
     -- Submit handler
@@ -268,11 +296,7 @@ function Baimless:ShowLogin(callback)
         
         if success then
             Animations:Tween(overlay, {BackgroundTransparency = 1}, 0.3)
-            for _, child in ipairs(panel:GetChildren()) do
-                if child:IsA("GuiObject") then
-                    Animations:Tween(child, {BackgroundTransparency = 1, TextTransparency = 1}, 0.3)
-                end
-            end
+            Animations:FadeOutGui(panel, 0.3)
             task.wait(0.3)
             gui:Destroy()
             self:CreateWindow()
