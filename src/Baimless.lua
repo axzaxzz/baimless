@@ -1,25 +1,23 @@
 --[[
     Baimless UI Library
-    Complete redesign to match CS2 Baimless visual style
+    Added: Top-left gradient overlay matching reference
     
     Usage:
-        local Baimless = loadstring(game:HttpGet('https://raw.githubusercontent.com/axzaxzz/baimless/main/src/Baimless.lua'))()
+        local Baimless = loadstring(game:HttpGet('https://raw.githubusercontent.com/axzaxzz/baimless/feature-background-gradient-top-left/src/Baimless.lua'))()
         
         Baimless:ShowLogin(function(username, password)
-            return true -- Return true to proceed to main UI
+            return true
         end)
 --]]
 
 local Baimless = {}
 Baimless.__index = Baimless
 
--- Services
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 
--- Core modules
 local Theme = {}
 local Components = {}
 local Animations = {}
@@ -30,6 +28,7 @@ Theme.Colors = {
     BackgroundLight = Color3.fromRGB(15, 15, 20),
     Panel = Color3.fromRGB(20, 20, 28),
     PanelDark = Color3.fromRGB(16, 16, 22),
+    GradientAccent = Color3.fromRGB(16, 13, 16), -- #100d10
     Accent = Color3.fromRGB(188, 70, 255),
     AccentDark = Color3.fromRGB(140, 50, 200),
     AccentBright = Color3.fromRGB(220, 130, 255),
@@ -158,6 +157,19 @@ function Components:CreateStroke(parent, color, thickness, transparency)
         ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
         Parent = parent
     })
+end
+
+function Components:CreateGradient(parent, colorStart, colorEnd, rotation)
+    local gradient = self:Create("UIGradient", {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, colorStart),
+            ColorSequenceKeypoint.new(0.25, colorStart),
+            ColorSequenceKeypoint.new(1, colorEnd)
+        }),
+        Rotation = rotation or 135,
+        Parent = parent
+    })
+    return gradient
 end
 
 function Components:CreatePadding(parent, padding)
@@ -486,6 +498,9 @@ function Baimless:CreateWindow()
     mainFrame:SetAttribute("OriginalTransparency", 0)
     Components:CreateCorner(mainFrame, UDim.new(0, 4))
     Components:CreateStroke(mainFrame, Theme.Colors.BorderBright, 1, 0.4)
+    
+    -- Add gradient overlay (top-left positioned, 25/75 distribution)
+    Components:CreateGradient(mainFrame, Theme.Colors.GradientAccent, Theme.Colors.Background, 135)
     
     -- Subtle purple glow
     Components:CreateGlow(mainFrame, Theme.Colors.Accent, 80, 0.85)
