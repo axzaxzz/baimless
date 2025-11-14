@@ -1,18 +1,13 @@
 --[[
     Baimless UI Library
-    Main entry point for the UI library
+    Complete redesign to match CS2 Baimless visual style
     
     Usage:
         local Baimless = loadstring(game:HttpGet('https://raw.githubusercontent.com/axzaxzz/baimless/main/src/Baimless.lua'))()
         
-        -- Show login screen
         Baimless:ShowLogin(function(username, password)
-            -- Your authentication logic here
             return true -- Return true to proceed to main UI
         end)
-        
-        -- Or create main UI directly
-        local UI = Baimless:CreateWindow()
 --]]
 
 local Baimless = {}
@@ -31,65 +26,81 @@ local Animations = {}
 
 -- Theme Configuration
 Theme.Colors = {
-    Background = Color3.fromRGB(12, 12, 15),
-    Panel = Color3.fromRGB(26, 26, 33),
+    Background = Color3.fromRGB(8, 8, 12),
+    BackgroundLight = Color3.fromRGB(15, 15, 20),
+    Panel = Color3.fromRGB(20, 20, 28),
+    PanelDark = Color3.fromRGB(16, 16, 22),
     Accent = Color3.fromRGB(188, 70, 255),
-    AccentSoft = Color3.fromRGB(210, 123, 255),
-    Text = Color3.fromRGB(234, 234, 234),
-    TextDim = Color3.fromRGB(150, 150, 150),
-    Border = Color3.fromRGB(40, 40, 50),
-    ButtonDark = Color3.fromRGB(45, 45, 55),
-    ButtonDarkHover = Color3.fromRGB(55, 55, 65),
-    Success = Color3.fromRGB(100, 255, 100),
-    Error = Color3.fromRGB(255, 100, 100)
+    AccentDark = Color3.fromRGB(140, 50, 200),
+    AccentBright = Color3.fromRGB(220, 130, 255),
+    Text = Color3.fromRGB(240, 240, 245),
+    TextDim = Color3.fromRGB(140, 140, 150),
+    TextDark = Color3.fromRGB(100, 100, 110),
+    Border = Color3.fromRGB(35, 35, 45),
+    BorderBright = Color3.fromRGB(50, 50, 65),
+    ButtonDark = Color3.fromRGB(40, 40, 52),
+    ButtonHover = Color3.fromRGB(50, 50, 65),
+    InputBg = Color3.fromRGB(12, 12, 18),
 }
 
 Theme.Sizes = {
-    CornerRadius = UDim.new(0, 4),
+    CornerRadius = UDim.new(0, 3),
     BorderSize = 1,
-    Padding = 12,
-    Spacing = 8
+    Padding = 14,
 }
 
 Theme.Fonts = {
     Regular = Enum.Font.Gotham,
     Bold = Enum.Font.GothamBold,
-    Mono = Enum.Font.RobotoMono
+    Semibold = Enum.Font.GothamMedium,
 }
 
 -- Animation Configuration
-Animations.Speed = 0.25
+Animations.Speed = 0.2
+Animations.SlowSpeed = 0.35
 Animations.Style = Enum.EasingStyle.Quad
 Animations.Direction = Enum.EasingDirection.Out
 
-function Animations:Tween(object, properties, duration)
+function Animations:Tween(object, properties, duration, style)
     duration = duration or self.Speed
-    local tween = TweenService:Create(object, TweenInfo.new(duration, self.Style, self.Direction), properties)
+    style = style or self.Style
+    local tween = TweenService:Create(object, TweenInfo.new(duration, style, self.Direction), properties)
     tween:Play()
     return tween
 end
 
 function Animations:FadeIn(object, duration)
-    object.Transparency = 1
-    self:Tween(object, {Transparency = 0}, duration)
+    if object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
+        object.TextTransparency = 1
+        self:Tween(object, {TextTransparency = 0, BackgroundTransparency = object:GetAttribute("OriginalBgTransparency") or 0}, duration)
+    else
+        object.BackgroundTransparency = 1
+        self:Tween(object, {BackgroundTransparency = object:GetAttribute("OriginalTransparency") or 0}, duration)
+    end
 end
 
 function Animations:SlideUp(object, distance, duration)
     local originalPos = object.Position
-    object.Position = originalPos + UDim2.new(0, 0, 0, distance or 10)
-    self:Tween(object, {Position = originalPos}, duration)
+    object.Position = originalPos + UDim2.new(0, 0, 0, distance or 20)
+    self:Tween(object, {Position = originalPos}, duration or self.SlowSpeed)
 end
 
 function Animations:Shake(object, intensity, duration)
     local originalPos = object.Position
-    intensity = intensity or 5
-    duration = duration or 0.5
+    intensity = intensity or 8
+    duration = duration or 0.4
     
-    for i = 1, 4 do
-        task.wait(duration / 8)
-        object.Position = originalPos + UDim2.new(0, math.random(-intensity, intensity), 0, 0)
+    for i = 1, 5 do
+        task.spawn(function()
+            task.wait((duration / 10) * (i - 1))
+            self:Tween(object, {
+                Position = originalPos + UDim2.new(0, math.random(-intensity, intensity), 0, 0)
+            }, duration / 10)
+        end)
     end
-    object.Position = originalPos
+    
+    task.wait(duration / 2)
+    self:Tween(object, {Position = originalPos}, duration / 2)
 end
 
 function Animations:FadeOutGui(guiObject, duration)
@@ -139,10 +150,11 @@ function Components:CreateCorner(parent, radius)
     })
 end
 
-function Components:CreateStroke(parent, color, thickness)
+function Components:CreateStroke(parent, color, thickness, transparency)
     return self:Create("UIStroke", {
         Color = color or Theme.Colors.Border,
         Thickness = thickness or Theme.Sizes.BorderSize,
+        Transparency = transparency or 0,
         ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
         Parent = parent
     })
@@ -150,100 +162,209 @@ end
 
 function Components:CreatePadding(parent, padding)
     padding = padding or Theme.Sizes.Padding
-    return self:Create("UIPadding", {
-        PaddingTop = UDim.new(0, padding),
-        PaddingBottom = UDim.new(0, padding),
-        PaddingLeft = UDim.new(0, padding),
-        PaddingRight = UDim.new(0, padding),
+    if type(padding) == "number" then
+        return self:Create("UIPadding", {
+            PaddingTop = UDim.new(0, padding),
+            PaddingBottom = UDim.new(0, padding),
+            PaddingLeft = UDim.new(0, padding),
+            PaddingRight = UDim.new(0, padding),
+            Parent = parent
+        })
+    else
+        return self:Create("UIPadding", {
+            PaddingTop = UDim.new(0, padding.Top or 0),
+            PaddingBottom = UDim.new(0, padding.Bottom or 0),
+            PaddingLeft = UDim.new(0, padding.Left or 0),
+            PaddingRight = UDim.new(0, padding.Right or 0),
+            Parent = parent
+        })
+    end
+end
+
+function Components:CreateShadow(parent, size, transparency)
+    local shadow = self:Create("ImageLabel", {
+        Size = UDim2.new(1, size or 30, 1, size or 30),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://5554236805",
+        ImageColor3 = Color3.fromRGB(0, 0, 0),
+        ImageTransparency = transparency or 0.7,
+        ScaleType = Enum.ScaleType.Slice,
+        SliceCenter = Rect.new(23, 23, 277, 277),
+        ZIndex = parent.ZIndex - 1,
         Parent = parent
     })
+    return shadow
+end
+
+function Components:CreateGlow(parent, color, size, transparency)
+    local glow = self:Create("ImageLabel", {
+        Size = UDim2.new(1, size or 40, 1, size or 40),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://5554236805",
+        ImageColor3 = color or Theme.Colors.Accent,
+        ImageTransparency = transparency or 0.5,
+        ScaleType = Enum.ScaleType.Slice,
+        SliceCenter = Rect.new(23, 23, 277, 277),
+        ZIndex = parent.ZIndex - 1,
+        Parent = parent
+    })
+    return glow
 end
 
 -- Main Library Functions
 function Baimless:ShowLogin(callback)
     local gui = self:CreateScreenGui()
     
-    -- Background overlay
+    -- Transparent background (no solid overlay)
     local overlay = Components:Create("Frame", {
         Size = UDim2.new(1, 0, 1, 0),
-        BackgroundColor3 = Theme.Colors.Background,
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Parent = gui
     })
     
-    -- Login panel
-    local panel = Components:Create("Frame", {
-        Size = UDim2.new(0, 340, 0, 280),
+    -- Login panel container
+    local panelContainer = Components:Create("Frame", {
+        Size = UDim2.new(0, 360, 0, 300),
         Position = UDim2.new(0.5, 0, 0.5, 0),
         AnchorPoint = Vector2.new(0.5, 0.5),
-        BackgroundColor3 = Theme.Colors.Panel,
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Parent = overlay
     })
-    Components:CreateCorner(panel)
-    Components:CreateStroke(panel)
-    Components:CreatePadding(panel, 24)
+    
+    -- Panel shadow
+    Components:CreateShadow(panelContainer, 50, 0.5)
+    
+    -- Main panel
+    local panel = Components:Create("Frame", {
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundColor3 = Theme.Colors.Panel,
+        BorderSizePixel = 0,
+        Parent = panelContainer
+    })
+    panel:SetAttribute("OriginalTransparency", 0)
+    Components:CreateCorner(panel, UDim.new(0, 4))
+    Components:CreateStroke(panel, Theme.Colors.BorderBright, 1, 0.3)
+    
+    -- Purple glow effect
+    Components:CreateGlow(panel, Theme.Colors.Accent, 60, 0.75)
+    
+    -- Top accent bar
+    local accentBar = Components:Create("Frame", {
+        Size = UDim2.new(1, 0, 0, 3),
+        BackgroundColor3 = Theme.Colors.Accent,
+        BorderSizePixel = 0,
+        Parent = panel
+    })
+    Components:CreateCorner(accentBar, UDim.new(0, 0))
+    
+    -- Left accent line
+    local leftAccent = Components:Create("Frame", {
+        Size = UDim2.new(0, 3, 0, 80),
+        Position = UDim2.new(0, 0, 0, 40),
+        BackgroundColor3 = Theme.Colors.Accent,
+        BorderSizePixel = 0,
+        Parent = panel
+    })
+    
+    -- Content container
+    local content = Components:Create("Frame", {
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Parent = panel
+    })
+    Components:CreatePadding(content, {Top = 30, Bottom = 24, Left = 28, Right = 28})
+    
+    -- Icon with glow
+    local iconContainer = Components:Create("Frame", {
+        Size = UDim2.new(0, 48, 0, 48),
+        Position = UDim2.new(0.5, 0, 0, -10),
+        AnchorPoint = Vector2.new(0.5, 0),
+        BackgroundColor3 = Theme.Colors.Accent,
+        BorderSizePixel = 0,
+        Parent = content
+    })
+    Components:CreateCorner(iconContainer, UDim.new(0, 8))
+    Components:CreateGlow(iconContainer, Theme.Colors.Accent, 30, 0.6)
+    
+    local iconLabel = Components:Create("TextLabel", {
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Text = "B",
+        TextColor3 = Color3.new(1, 1, 1),
+        TextSize = 28,
+        Font = Theme.Fonts.Bold,
+        Parent = iconContainer
+    })
     
     -- Title
     local title = Components:Create("TextLabel", {
         Size = UDim2.new(1, 0, 0, 30),
+        Position = UDim2.new(0, 0, 0, 58),
         BackgroundTransparency = 1,
         Text = "credentials",
         TextColor3 = Theme.Colors.Text,
-        TextSize = 18,
-        Font = Theme.Fonts.Bold,
+        TextSize = 16,
+        Font = Theme.Fonts.Semibold,
         TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = panel
+        Parent = content
     })
+    title:SetAttribute("OriginalBgTransparency", 1)
     
     -- Username input
-    local usernameFrame = self:CreateInput(panel, "username", UDim2.new(0, 0, 0, 50))
+    local usernameFrame = self:CreateInput(content, "username", UDim2.new(0, 0, 0, 100))
     local usernameBox = usernameFrame:FindFirstChildOfClass("TextBox")
     
     -- Password input
-    local passwordFrame = self:CreateInput(panel, "password", UDim2.new(0, 0, 0, 110))
+    local passwordFrame = self:CreateInput(content, "password", UDim2.new(0, 0, 0, 155))
     local passwordBox = passwordFrame:FindFirstChildOfClass("TextBox")
-    passwordBox.TextEditable = true
     
     -- Remember me checkbox
     local rememberFrame = Components:Create("Frame", {
         Size = UDim2.new(1, 0, 0, 24),
-        Position = UDim2.new(0, 0, 0, 170),
+        Position = UDim2.new(0, 0, 0, 205),
         BackgroundTransparency = 1,
-        Parent = panel
+        Parent = content
     })
     
     local checkbox = Components:Create("Frame", {
-        Size = UDim2.new(0, 18, 0, 18),
-        BackgroundColor3 = Theme.Colors.Background,
+        Size = UDim2.new(0, 16, 0, 16),
+        Position = UDim2.new(0, 0, 0, 4),
+        BackgroundColor3 = Theme.Colors.InputBg,
         BorderSizePixel = 0,
         Parent = rememberFrame
     })
     Components:CreateCorner(checkbox, UDim.new(0, 2))
-    Components:CreateStroke(checkbox)
+    Components:CreateStroke(checkbox, Theme.Colors.Border, 1)
     
     local checkmark = Components:Create("TextLabel", {
         Size = UDim2.new(1, 0, 1, 0),
         BackgroundTransparency = 1,
         Text = "✓",
         TextColor3 = Theme.Colors.Accent,
-        TextSize = 14,
+        TextSize = 12,
         Font = Theme.Fonts.Bold,
         Visible = false,
         Parent = checkbox
     })
     
     local rememberLabel = Components:Create("TextLabel", {
-        Size = UDim2.new(1, -26, 1, 0),
-        Position = UDim2.new(0, 26, 0, 0),
+        Size = UDim2.new(1, -24, 1, 0),
+        Position = UDim2.new(0, 24, 0, 0),
         BackgroundTransparency = 1,
         Text = "Remember me",
-        TextColor3 = Theme.Colors.Text,
-        TextSize = 13,
+        TextColor3 = Theme.Colors.TextDim,
+        TextSize = 12,
         Font = Theme.Fonts.Regular,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = rememberFrame
     })
+    rememberLabel:SetAttribute("OriginalBgTransparency", 1)
     
     local rememberState = false
     local checkboxButton = Components:Create("TextButton", {
@@ -256,26 +377,28 @@ function Baimless:ShowLogin(callback)
     checkboxButton.MouseButton1Click:Connect(function()
         rememberState = not rememberState
         checkmark.Visible = rememberState
-        Animations:Tween(checkbox, {BackgroundColor3 = rememberState and Theme.Colors.Accent or Theme.Colors.Background}, 0.15)
+        Animations:Tween(checkbox, {BackgroundColor3 = rememberState and Theme.Colors.Accent or Theme.Colors.InputBg}, 0.15)
     end)
     
-    -- Submit button (dark gray like the reference image)
+    -- Submit button
     local submitBtn = Components:Create("TextButton", {
-        Size = UDim2.new(1, 0, 0, 40),
-        Position = UDim2.new(0, 0, 1, -40),
+        Size = UDim2.new(1, 0, 0, 42),
+        Position = UDim2.new(0, 0, 1, -42),
         BackgroundColor3 = Theme.Colors.ButtonDark,
         BorderSizePixel = 0,
         Text = "Submit",
-        TextColor3 = Color3.new(1, 1, 1),
-        TextSize = 14,
-        Font = Theme.Fonts.Bold,
-        Parent = panel
+        TextColor3 = Theme.Colors.Text,
+        TextSize = 13,
+        Font = Theme.Fonts.Semibold,
+        Parent = content
     })
-    Components:CreateCorner(submitBtn)
+    submitBtn:SetAttribute("OriginalBgTransparency", 0)
+    Components:CreateCorner(submitBtn, UDim.new(0, 3))
+    Components:CreateStroke(submitBtn, Theme.Colors.BorderBright, 1, 0.5)
     
     -- Button hover effect
     submitBtn.MouseEnter:Connect(function()
-        Animations:Tween(submitBtn, {BackgroundColor3 = Theme.Colors.ButtonDarkHover}, 0.15)
+        Animations:Tween(submitBtn, {BackgroundColor3 = Theme.Colors.ButtonHover}, 0.15)
     end)
     
     submitBtn.MouseLeave:Connect(function()
@@ -288,46 +411,46 @@ function Baimless:ShowLogin(callback)
         local password = passwordBox.Text
         
         if username == "" or password == "" then
-            Animations:Shake(panel, 5, 0.3)
+            Animations:Shake(panelContainer, 8, 0.4)
             return
         end
         
         local success = callback(username, password)
         
         if success then
-            Animations:Tween(overlay, {BackgroundTransparency = 1}, 0.3)
             Animations:FadeOutGui(panel, 0.3)
             task.wait(0.3)
             gui:Destroy()
             self:CreateWindow()
         else
-            Animations:Shake(panel, 5, 0.3)
+            Animations:Shake(panelContainer, 8, 0.4)
         end
     end)
     
     -- Entrance animations
-    Animations:FadeIn(overlay, 0.3)
-    Animations:SlideUp(panel, 10, 0.3)
+    Animations:FadeIn(panel, 0.35)
+    Animations:SlideUp(panelContainer, 30, 0.4)
 end
 
 function Baimless:CreateInput(parent, placeholder, position)
     local frame = Components:Create("Frame", {
-        Size = UDim2.new(1, 0, 0, 40),
+        Size = UDim2.new(1, 0, 0, 42),
         Position = position,
-        BackgroundColor3 = Theme.Colors.Background,
+        BackgroundColor3 = Theme.Colors.InputBg,
         BorderSizePixel = 0,
         Parent = parent
     })
-    Components:CreateCorner(frame)
-    Components:CreateStroke(frame)
+    frame:SetAttribute("OriginalTransparency", 0)
+    Components:CreateCorner(frame, UDim.new(0, 3))
+    Components:CreateStroke(frame, Theme.Colors.Border, 1)
     
     local textbox = Components:Create("TextBox", {
         Size = UDim2.new(1, -16, 1, 0),
-        Position = UDim2.new(0, 8, 0, 0),
+        Position = UDim2.new(0, 12, 0, 0),
         BackgroundTransparency = 1,
         Text = "",
         PlaceholderText = placeholder,
-        PlaceholderColor3 = Theme.Colors.TextDim,
+        PlaceholderColor3 = Theme.Colors.TextDark,
         TextColor3 = Theme.Colors.Text,
         TextSize = 13,
         Font = Theme.Fonts.Regular,
@@ -335,6 +458,7 @@ function Baimless:CreateInput(parent, placeholder, position)
         ClearTextOnFocus = false,
         Parent = frame
     })
+    textbox:SetAttribute("OriginalBgTransparency", 1)
     
     return frame
 end
@@ -342,88 +466,116 @@ end
 function Baimless:CreateWindow()
     local gui = self:CreateScreenGui()
     
-    -- Main container
-    local mainFrame = Components:Create("Frame", {
-        Size = UDim2.new(0, 800, 0, 600),
+    -- Main container with shadow
+    local mainContainer = Components:Create("Frame", {
+        Size = UDim2.new(0, 900, 0, 650),
         Position = UDim2.new(0.5, 0, 0.5, 0),
         AnchorPoint = Vector2.new(0.5, 0.5),
-        BackgroundColor3 = Theme.Colors.Background,
-        BorderSizePixel = 0,
+        BackgroundTransparency = 1,
         Parent = gui
     })
-    Components:CreateCorner(mainFrame)
-    Components:CreateStroke(mainFrame)
     
-    -- Header
+    Components:CreateShadow(mainContainer, 60, 0.6)
+    
+    local mainFrame = Components:Create("Frame", {
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundColor3 = Theme.Colors.Background,
+        BorderSizePixel = 0,
+        Parent = mainContainer
+    })
+    mainFrame:SetAttribute("OriginalTransparency", 0)
+    Components:CreateCorner(mainFrame, UDim.new(0, 4))
+    Components:CreateStroke(mainFrame, Theme.Colors.BorderBright, 1, 0.4)
+    
+    -- Subtle purple glow
+    Components:CreateGlow(mainFrame, Theme.Colors.Accent, 80, 0.85)
+    
+    -- Header with gradient effect
     local header = Components:Create("Frame", {
-        Size = UDim2.new(1, 0, 0, 50),
-        BackgroundColor3 = Theme.Colors.Panel,
+        Size = UDim2.new(1, 0, 0, 55),
+        BackgroundColor3 = Theme.Colors.PanelDark,
         BorderSizePixel = 0,
         Parent = mainFrame
     })
-    Components:CreateCorner(header)
+    Components:CreateCorner(header, UDim.new(0, 4))
     
-    -- Logo
+    local headerBottomCover = Components:Create("Frame", {
+        Size = UDim2.new(1, 0, 0, 4),
+        Position = UDim2.new(0, 0, 1, -4),
+        BackgroundColor3 = Theme.Colors.PanelDark,
+        BorderSizePixel = 0,
+        Parent = header
+    })
+    
+    -- Top accent line
+    local topAccent = Components:Create("Frame", {
+        Size = UDim2.new(1, 0, 0, 2),
+        BackgroundColor3 = Theme.Colors.Accent,
+        BorderSizePixel = 0,
+        Parent = header
+    })
+    
+    -- Logo with styling
     local logo = Components:Create("TextLabel", {
-        Size = UDim2.new(0, 150, 1, 0),
-        Position = UDim2.new(0, 16, 0, 0),
+        Size = UDim2.new(0, 120, 1, 0),
+        Position = UDim2.new(0, 20, 0, 0),
         BackgroundTransparency = 1,
         Text = "BAIMLESS",
         TextColor3 = Theme.Colors.Text,
-        TextSize = 16,
+        TextSize = 15,
         Font = Theme.Fonts.Bold,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = header
     })
+    logo:SetAttribute("OriginalBgTransparency", 1)
     
-    -- Tab bar (world modulation, screen modulation)
-    local tabBar = Components:Create("Frame", {
-        Size = UDim2.new(1, -170, 1, 0),
-        Position = UDim2.new(0, 170, 0, 0),
-        BackgroundTransparency = 1,
-        Parent = header
-    })
-    
-    local tabList = Components:Create("UIListLayout", {
-        FillDirection = Enum.FillDirection.Horizontal,
-        HorizontalAlignment = Enum.HorizontalAlignment.Left,
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 20),
-        Parent = tabBar
-    })
-    
-    -- Sidebar
+    -- Sidebar with enhanced styling
     local sidebar = Components:Create("Frame", {
-        Size = UDim2.new(0, 180, 1, -50),
-        Position = UDim2.new(0, 0, 0, 50),
-        BackgroundColor3 = Theme.Colors.Panel,
+        Size = UDim2.new(0, 200, 1, -55),
+        Position = UDim2.new(0, 0, 0, 55),
+        BackgroundColor3 = Theme.Colors.PanelDark,
         BorderSizePixel = 0,
         Parent = mainFrame
+    })
+    
+    local sidebarRightBorder = Components:Create("Frame", {
+        Size = UDim2.new(0, 1, 1, 0),
+        Position = UDim2.new(1, 0, 0, 0),
+        BackgroundColor3 = Theme.Colors.Border,
+        BorderSizePixel = 0,
+        Parent = sidebar
+    })
+    
+    local sidebarPadding = Components:Create("Frame", {
+        Size = UDim2.new(1, 0, 1, -20),
+        Position = UDim2.new(0, 0, 0, 20),
+        BackgroundTransparency = 1,
+        Parent = sidebar
     })
     
     local sidebarList = Components:Create("UIListLayout", {
         FillDirection = Enum.FillDirection.Vertical,
         HorizontalAlignment = Enum.HorizontalAlignment.Left,
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 0),
-        Parent = sidebar
+        Padding = UDim.new(0, 2),
+        Parent = sidebarPadding
     })
     
-    -- Content area
+    -- Content area with better styling
     local content = Components:Create("Frame", {
-        Size = UDim2.new(1, -180, 1, -50),
-        Position = UDim2.new(0, 180, 0, 50),
+        Size = UDim2.new(1, -200, 1, -55),
+        Position = UDim2.new(0, 200, 0, 55),
         BackgroundColor3 = Theme.Colors.Background,
         BorderSizePixel = 0,
         Parent = mainFrame
     })
-    Components:CreatePadding(content, 16)
+    Components:CreatePadding(content, 20)
     
     local contentScroll = Components:Create("ScrollingFrame", {
         Size = UDim2.new(1, 0, 1, 0),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        ScrollBarThickness = 4,
+        ScrollBarThickness = 3,
         ScrollBarImageColor3 = Theme.Colors.Accent,
         CanvasSize = UDim2.new(0, 0, 0, 0),
         Parent = content
@@ -433,50 +585,51 @@ function Baimless:CreateWindow()
         FillDirection = Enum.FillDirection.Vertical,
         HorizontalAlignment = Enum.HorizontalAlignment.Left,
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 12),
+        Padding = UDim.new(0, 16),
         Parent = contentScroll
     })
     
     contentList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        contentScroll.CanvasSize = UDim2.new(0, 0, 0, contentList.AbsoluteContentSize.Y)
+        contentScroll.CanvasSize = UDim2.new(0, 0, 0, contentList.AbsoluteContentSize.Y + 20)
     end)
     
     -- Window object
     local window = {
         Gui = gui,
+        Container = mainContainer,
         Frame = mainFrame,
-        Sidebar = sidebar,
+        Sidebar = sidebarPadding,
         Content = contentScroll,
         CurrentCategory = nil,
         Categories = {}
     }
     
-    -- Add categories
+    -- Add categories with proper icons
     local categories = {
-        {name = "aimbot", icon = "🎯"},
-        {name = "ragebot", icon = "⚡"},
-        {name = "visuals", icon = "👁️"},
-        {name = "world", icon = "🌍"},
-        {name = "inventory changer", icon = "🎒"},
-        {name = "misc", icon = "⚙️"},
-        {name = "grenade helper", icon = "💣"},
-        {name = "configs", icon = "📁"}
+        {name = "aimbot", icon = "🎯", color = Color3.fromRGB(255, 100, 100)},
+        {name = "ragebot", icon = "⚡", color = Color3.fromRGB(255, 200, 100)},
+        {name = "visuals", icon = "👁", color = Color3.fromRGB(150, 150, 255)},
+        {name = "world", icon = "🌍", color = Color3.fromRGB(100, 200, 255)},
+        {name = "inventory changer", icon = "🎒", color = Color3.fromRGB(255, 100, 150)},
+        {name = "misc", icon = "⚙", color = Color3.fromRGB(180, 180, 180)},
+        {name = "grenade helper", icon = "💣", color = Color3.fromRGB(200, 150, 100)},
+        {name = "configs", icon = "📁", color = Color3.fromRGB(100, 180, 255)}
     }
     
     for i, cat in ipairs(categories) do
-        self:AddCategory(window, cat.name, cat.icon)
+        self:AddCategory(window, cat.name, cat.icon, cat.color)
     end
     
-    -- Entrance animation
-    Animations:FadeIn(mainFrame, 0.3)
-    Animations:SlideUp(mainFrame, 15, 0.3)
+    -- Entrance animations
+    Animations:FadeIn(mainFrame, 0.4)
+    Animations:SlideUp(mainContainer, 40, 0.45)
     
     return window
 end
 
-function Baimless:AddCategory(window, name, icon)
+function Baimless:AddCategory(window, name, icon, iconColor)
     local btn = Components:Create("TextButton", {
-        Size = UDim2.new(1, 0, 0, 38),
+        Size = UDim2.new(1, 0, 0, 36),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Text = "",
@@ -484,27 +637,56 @@ function Baimless:AddCategory(window, name, icon)
         Parent = window.Sidebar
     })
     
-    -- Highlight bar
+    -- Highlight background
+    local highlightBg = Components:Create("Frame", {
+        Size = UDim2.new(1, -8, 1, -4),
+        Position = UDim2.new(0, 4, 0, 2),
+        BackgroundColor3 = Theme.Colors.Accent,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Parent = btn
+    })
+    Components:CreateCorner(highlightBg, UDim.new(0, 3))
+    
+    -- Left accent bar
     local highlight = Components:Create("Frame", {
-        Size = UDim2.new(0, 3, 1, 0),
+        Size = UDim2.new(0, 3, 1, -8),
+        Position = UDim2.new(0, 0, 0, 4),
         BackgroundColor3 = Theme.Colors.Accent,
         BorderSizePixel = 0,
         Visible = false,
         Parent = btn
     })
+    Components:CreateCorner(highlight, UDim.new(0, 2))
+    
+    -- Icon with color
+    local iconLabel = Components:Create("TextLabel", {
+        Size = UDim2.new(0, 24, 0, 24),
+        Position = UDim2.new(0, 12, 0.5, 0),
+        AnchorPoint = Vector2.new(0, 0.5),
+        BackgroundTransparency = 1,
+        Text = icon,
+        TextColor3 = iconColor or Theme.Colors.TextDim,
+        TextSize = 16,
+        Font = Theme.Fonts.Regular,
+        Parent = btn
+    })
+    iconLabel:SetAttribute("OriginalBgTransparency", 1)
+    iconLabel:SetAttribute("DefaultColor", iconColor or Theme.Colors.TextDim)
     
     -- Label
     local label = Components:Create("TextLabel", {
-        Size = UDim2.new(1, -20, 1, 0),
-        Position = UDim2.new(0, 20, 0, 0),
+        Size = UDim2.new(1, -45, 1, 0),
+        Position = UDim2.new(0, 42, 0, 0),
         BackgroundTransparency = 1,
-        Text = icon .. "  " .. name,
+        Text = name,
         TextColor3 = Theme.Colors.TextDim,
-        TextSize = 13,
+        TextSize = 12,
         Font = Theme.Fonts.Regular,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = btn
     })
+    label:SetAttribute("OriginalBgTransparency", 1)
     
     -- Click handler
     btn.MouseButton1Click:Connect(function()
@@ -515,24 +697,28 @@ function Baimless:AddCategory(window, name, icon)
     btn.MouseEnter:Connect(function()
         if window.CurrentCategory ~= name then
             Animations:Tween(label, {TextColor3 = Theme.Colors.Text}, 0.15)
+            Animations:Tween(highlightBg, {BackgroundTransparency = 0.95}, 0.15)
         end
     end)
     
     btn.MouseLeave:Connect(function()
         if window.CurrentCategory ~= name then
             Animations:Tween(label, {TextColor3 = Theme.Colors.TextDim}, 0.15)
+            Animations:Tween(highlightBg, {BackgroundTransparency = 1}, 0.15)
         end
     end)
     
     window.Categories[name] = {
         Button = btn,
         Label = label,
+        Icon = iconLabel,
         Highlight = highlight,
+        HighlightBg = highlightBg,
         Sections = {}
     }
     
-    -- Select first category
-    if #window.Categories == 1 then
+    -- Select first category by default
+    if not window.CurrentCategory then
         self:SelectCategory(window, name)
     end
 end
@@ -542,14 +728,20 @@ function Baimless:SelectCategory(window, name)
     if window.CurrentCategory then
         local prev = window.Categories[window.CurrentCategory]
         prev.Highlight.Visible = false
-        Animations:Tween(prev.Label, {TextColor3 = Theme.Colors.TextDim}, 0.15)
+        Animations:Tween(prev.HighlightBg, {BackgroundTransparency = 1}, 0.2)
+        Animations:Tween(prev.Label, {TextColor3 = Theme.Colors.TextDim}, 0.2)
+        if prev.Icon:GetAttribute("DefaultColor") then
+            Animations:Tween(prev.Icon, {TextColor3 = prev.Icon:GetAttribute("DefaultColor")}, 0.2)
+        end
     end
     
     -- Select new
     window.CurrentCategory = name
     local current = window.Categories[name]
     current.Highlight.Visible = true
-    Animations:Tween(current.Label, {TextColor3 = Theme.Colors.Text}, 0.15)
+    Animations:Tween(current.HighlightBg, {BackgroundTransparency = 0.92}, 0.2)
+    Animations:Tween(current.Label, {TextColor3 = Theme.Colors.Text}, 0.2)
+    Animations:Tween(current.Icon, {TextColor3 = Theme.Colors.Accent}, 0.2)
     
     -- Clear content
     for _, child in ipairs(window.Content:GetChildren()) do
@@ -558,7 +750,7 @@ function Baimless:SelectCategory(window, name)
         end
     end
     
-    -- Load category content (placeholder)
+    -- Load category content
     self:LoadCategoryContent(window, name)
 end
 
@@ -575,30 +767,55 @@ function Baimless:LoadCategoryContent(window, categoryName)
     elseif categoryName == "inventory changer" then
         local section = self:AddSection(window, "Grenade Tracer")
         self:AddCheckbox(section, "Icon Made Color", false)
+    elseif categoryName == "visuals" then
+        local section = self:AddSection(window, "ESP")
+        self:AddCheckbox(section, "Enable ESP", false)
+        self:AddCheckbox(section, "Show Names", false)
+        self:AddCheckbox(section, "Show Distance", false)
     end
 end
 
 function Baimless:AddSection(window, title)
     local section = Components:Create("Frame", {
-        Size = UDim2.new(1, 0, 0, 40),
+        Size = UDim2.new(1, 0, 0, 50),
         BackgroundTransparency = 1,
         Parent = window.Content
     })
     
+    -- Section header with background
+    local headerBg = Components:Create("Frame", {
+        Size = UDim2.new(1, 0, 0, 32),
+        BackgroundColor3 = Theme.Colors.PanelDark,
+        BorderSizePixel = 0,
+        Parent = section
+    })
+    Components:CreateCorner(headerBg, UDim.new(0, 3))
+    Components:CreateStroke(headerBg, Theme.Colors.Border, 1, 0.5)
+    
+    local accentLine = Components:Create("Frame", {
+        Size = UDim2.new(0, 3, 1, 0),
+        BackgroundColor3 = Theme.Colors.Accent,
+        BorderSizePixel = 0,
+        Parent = headerBg
+    })
+    
     local titleLabel = Components:Create("TextLabel", {
-        Size = UDim2.new(1, 0, 0, 30),
+        Size = UDim2.new(1, -16, 1, 0),
+        Position = UDim2.new(0, 16, 0, 0),
         BackgroundTransparency = 1,
         Text = title,
         TextColor3 = Theme.Colors.Accent,
-        TextSize = 14,
-        Font = Theme.Fonts.Bold,
+        TextSize = 13,
+        Font = Theme.Fonts.Semibold,
         TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = section
+        Parent = headerBg
     })
+    titleLabel:SetAttribute("OriginalBgTransparency", 1)
     
+    -- Container for items
     local container = Components:Create("Frame", {
-        Size = UDim2.new(1, 0, 1, -30),
-        Position = UDim2.new(0, 0, 0, 30),
+        Size = UDim2.new(1, 0, 1, -38),
+        Position = UDim2.new(0, 0, 0, 38),
         BackgroundTransparency = 1,
         Parent = section
     })
@@ -607,12 +824,12 @@ function Baimless:AddSection(window, title)
         FillDirection = Enum.FillDirection.Vertical,
         HorizontalAlignment = Enum.HorizontalAlignment.Left,
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 6),
+        Padding = UDim.new(0, 4),
         Parent = container
     })
     
     layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        section.Size = UDim2.new(1, 0, 0, 30 + layout.AbsoluteContentSize.Y)
+        section.Size = UDim2.new(1, 0, 0, 38 + layout.AbsoluteContentSize.Y)
     end)
     
     return container
@@ -620,31 +837,49 @@ end
 
 function Baimless:AddCheckbox(parent, text, defaultValue)
     local frame = Components:Create("Frame", {
-        Size = UDim2.new(1, 0, 0, 24),
-        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 28),
+        BackgroundColor3 = Theme.Colors.PanelDark,
+        BorderSizePixel = 0,
         Parent = parent
     })
-    
-    local checkbox = Components:Create("Frame", {
-        Size = UDim2.new(0, 16, 0, 16),
-        Position = UDim2.new(1, -16, 0, 4),
-        BackgroundColor3 = defaultValue and Theme.Colors.Accent or Theme.Colors.Background,
-        BorderSizePixel = 0,
-        Parent = frame
-    })
-    Components:CreateCorner(checkbox, UDim.new(0, 2))
-    Components:CreateStroke(checkbox)
+    Components:CreateCorner(frame, UDim.new(0, 3))
+    Components:CreateStroke(frame, Theme.Colors.Border, 1, 0.7)
     
     local label = Components:Create("TextLabel", {
-        Size = UDim2.new(1, -24, 1, 0),
+        Size = UDim2.new(1, -40, 1, 0),
+        Position = UDim2.new(0, 12, 0, 0),
         BackgroundTransparency = 1,
         Text = text,
         TextColor3 = Theme.Colors.Text,
-        TextSize = 12,
+        TextSize = 11,
         Font = Theme.Fonts.Regular,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = frame
     })
+    label:SetAttribute("OriginalBgTransparency", 1)
+    
+    local checkbox = Components:Create("Frame", {
+        Size = UDim2.new(0, 16, 0, 16),
+        Position = UDim2.new(1, -24, 0.5, 0),
+        AnchorPoint = Vector2.new(0, 0.5),
+        BackgroundColor3 = defaultValue and Theme.Colors.Accent or Theme.Colors.InputBg,
+        BorderSizePixel = 0,
+        Parent = frame
+    })
+    Components:CreateCorner(checkbox, UDim.new(0, 2))
+    Components:CreateStroke(checkbox, defaultValue and Theme.Colors.Accent or Theme.Colors.Border, 1)
+    
+    local checkmark = Components:Create("TextLabel", {
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Text = "✓",
+        TextColor3 = Color3.new(1, 1, 1),
+        TextSize = 11,
+        Font = Theme.Fonts.Bold,
+        Visible = defaultValue,
+        Parent = checkbox
+    })
+    checkmark:SetAttribute("OriginalBgTransparency", 1)
     
     local button = Components:Create("TextButton", {
         Size = UDim2.new(1, 0, 1, 0),
@@ -656,9 +891,29 @@ function Baimless:AddCheckbox(parent, text, defaultValue)
     local state = defaultValue
     button.MouseButton1Click:Connect(function()
         state = not state
-        Animations:Tween(checkbox, {
-            BackgroundColor3 = state and Theme.Colors.Accent or Theme.Colors.Background
-        }, 0.15)
+        checkmark.Visible = state
+        
+        local stroke = checkbox:FindFirstChildOfClass("UIStroke")
+        if state then
+            Animations:Tween(checkbox, {BackgroundColor3 = Theme.Colors.Accent}, 0.15)
+            if stroke then
+                Animations:Tween(stroke, {Color = Theme.Colors.Accent}, 0.15)
+            end
+        else
+            Animations:Tween(checkbox, {BackgroundColor3 = Theme.Colors.InputBg}, 0.15)
+            if stroke then
+                Animations:Tween(stroke, {Color = Theme.Colors.Border}, 0.15)
+            end
+        end
+    end)
+    
+    -- Hover effect
+    button.MouseEnter:Connect(function()
+        Animations:Tween(frame, {BackgroundColor3 = Theme.Colors.Panel}, 0.15)
+    end)
+    
+    button.MouseLeave:Connect(function()
+        Animations:Tween(frame, {BackgroundColor3 = Theme.Colors.PanelDark}, 0.15)
     end)
     
     return frame
@@ -668,7 +923,8 @@ function Baimless:CreateScreenGui()
     local gui = Components:Create("ScreenGui", {
         Name = "BaimlessUI",
         ResetOnSpawn = false,
-        ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        IgnoreGuiInset = true
     })
     
     if gethui then
